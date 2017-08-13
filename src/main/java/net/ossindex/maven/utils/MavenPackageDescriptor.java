@@ -43,7 +43,14 @@ import net.ossindex.common.VulnerabilityDescriptor;
  *
  */
 public class MavenPackageDescriptor extends MavenIdWrapper {
+	/**
+	 * The module is the project/module that owns this package dependency
+	 */
+	private MavenIdWrapper module;
 	
+	/**
+	 * Parent package that was actually included in the project/module
+	 */
 	private MavenIdWrapper parent;
 
 	@XmlElement(name = "vulnerability-total")
@@ -74,6 +81,17 @@ public class MavenPackageDescriptor extends MavenIdWrapper {
 		vulnerabilities = pkg.getVulnerabilities();
 	}
 
+	/**
+	 * The module is the project/module that owns this package dependency
+	 */
+	public void setModule(MavenIdWrapper module) {
+		this.module = module;
+	}
+	
+	public MavenIdWrapper getModule() {
+		return module;
+	}
+	
 	public void setParent(MavenIdWrapper parent) {
 		this.parent = parent;
 	}

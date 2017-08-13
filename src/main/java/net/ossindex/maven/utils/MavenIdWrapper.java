@@ -129,4 +129,15 @@ public class MavenIdWrapper {
 		}
 		return sb.toString();
 	}
+	
+	public String toString() {
+		return getMavenVersionId();
+	}
+	
+	public boolean equals(Object o) {
+		if (o == null || !(o instanceof MavenIdWrapper)) {
+			return false;
+		}
+		return getMavenVersionId().equals(((MavenIdWrapper)o).getMavenVersionId());
+	}
 }

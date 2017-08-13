@@ -35,6 +35,7 @@ import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 
@@ -115,6 +116,11 @@ public class OssIndexMojo extends AbstractMojo
 
 	@Parameter( defaultValue = "${session}", readonly = true, required = true )
 	private MavenSession session;
+	
+	/**
+	 * Aggregate all of the results into a static list (so all module builds can access the same list).
+	 */
+	private static List<MavenPackageDescriptor> results = new LinkedList<MavenPackageDescriptor>(); 
 
 	/**
 	 * The dependency tree builder to use.
@@ -138,6 +144,11 @@ public class OssIndexMojo extends AbstractMojo
 	@Override
 	public void execute() throws MojoExecutionException, MojoFailureException
 	{
+		MavenIdWrapper moduleId = new MavenIdWrapper();
+		moduleId.setGroupId(project.getGroupId());
+		moduleId.setArtifactId(project.getArtifactId());
+		moduleId.setVersion(project.getVersion());
+		
 		if(ignore != null)
 		{
 			ignore = ignore.trim();
@@ -190,6 +201,7 @@ public class OssIndexMojo extends AbstractMojo
 
 			// Analyze the results
 			for (MavenPackageDescriptor pkg : results) {
+				pkg.setModule(moduleId);
 				String idPkg = pkg.getMavenPackageId();
 				String idVer = pkg.getMavenVersionId();
 				if(!ignoreSet.contains(idPkg) && !ignoreSet.contains(idVer))
@@ -199,17 +211,20 @@ public class OssIndexMojo extends AbstractMojo
 					failures += report(parentPkg, pkg);
 				}
 			}
+			
+			// Aggregate results for all modules
+			this.results.addAll(results);
 
 			// Report to various file loggers
 			for (File file: outputFiles) {
 				if (file.getName().endsWith(".txt")) {
-					exportTxt(file, results);
+					exportTxt(file, OssIndexMojo.results);
 				}
 				if (file.getName().endsWith(".json")) {
-					exportJson(file, results);
+					exportJson(file, OssIndexMojo.results);
 				}
 				if (file.getName().endsWith(".xml")) {
-					exportXml(file, results);
+					exportXml(file, OssIndexMojo.results);
 				}
 			}
 
@@ -237,17 +252,27 @@ public class OssIndexMojo extends AbstractMojo
 	 */
 	private void exportTxt(File file, Collection<MavenPackageDescriptor> results) {
 		PrintWriter out = null;
+		MavenIdWrapper lastModule = null;
 		try {
 			out = new PrintWriter(new FileWriter(file));
 			for (MavenPackageDescriptor pkg : results) {
 				MavenIdWrapper parentPkg = pkg.getParent();
+				MavenIdWrapper module = pkg.getModule();
 				String pkgId = pkg.getMavenVersionId();
 				int total = pkg.getVulnerabilityTotal();
+				
+				if (!module.equals(lastModule)) {
+					out.println();
+					out.println("==============================================================");
+					out.println(module);
+					out.println("==============================================================");
+					lastModule = module;
+				}
 
 				List<VulnerabilityDescriptor> vulnerabilities = pkg.getVulnerabilities();
 				if (vulnerabilities != null && !vulnerabilities.isEmpty()) {
 					int matches = pkg.getVulnerabilityMatches();
-					out.println("");
+					out.println();
 					out.println("--------------------------------------------------------------");
 					out.println(pkgId + "  [VULNERABLE]");
 					if(parentPkg != null)
@@ -264,7 +289,7 @@ public class OssIndexMojo extends AbstractMojo
 						out.println("");
 					}
 					out.println("--------------------------------------------------------------");
-					out.println("");
+					out.println();
 				} else {
 					if (total > 0) {
 						out.println(pkgId + ": " + total + " known vulnerabilities, 0 affecting installed version");
