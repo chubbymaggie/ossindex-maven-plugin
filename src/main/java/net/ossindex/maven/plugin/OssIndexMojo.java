@@ -59,6 +59,8 @@ import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.project.DefaultProjectBuildingRequest;
 import org.apache.maven.project.MavenProject;
 import org.apache.maven.project.ProjectBuildingRequest;
+import org.apache.maven.settings.Proxy;
+import org.apache.maven.settings.Settings;
 import org.apache.maven.shared.dependency.graph.DependencyGraphBuilder;
 import org.apache.maven.shared.dependency.graph.DependencyGraphBuilderException;
 import org.apache.maven.shared.dependency.graph.DependencyNode;
@@ -118,6 +120,12 @@ public class OssIndexMojo extends AbstractMojo
 	private MavenSession session;
 	
 	/**
+	 * Information from the settings.xml file
+	 */
+    @Parameter( defaultValue = "${settings}", readonly = true )
+    private Settings settings;
+	
+	/**
 	 * Aggregate all of the results into a static list (so all module builds can access the same list).
 	 */
 	private static List<MavenPackageDescriptor> results = new LinkedList<MavenPackageDescriptor>(); 
@@ -144,6 +152,11 @@ public class OssIndexMojo extends AbstractMojo
 	@Override
 	public void execute() throws MojoExecutionException, MojoFailureException
 	{
+		List<Proxy> proxies = settings.getProxies();
+		if (proxies != null && proxies.size() > 0) {
+			getLog().debug("Using proxy");
+		}
+
 		MavenIdWrapper moduleId = new MavenIdWrapper();
 		moduleId.setGroupId(project.getGroupId());
 		moduleId.setArtifactId(project.getArtifactId());
@@ -173,7 +186,7 @@ public class OssIndexMojo extends AbstractMojo
 			}
 		}
 
-		DependencyAuditor auditor = new DependencyAuditor();
+		DependencyAuditor auditor = new DependencyAuditor(proxies);
 
 		try
 		{
@@ -213,7 +226,7 @@ public class OssIndexMojo extends AbstractMojo
 			}
 			
 			// Aggregate results for all modules
-			this.results.addAll(results);
+			OssIndexMojo.results.addAll(results);
 
 			// Report to various file loggers
 			for (File file: outputFiles) {

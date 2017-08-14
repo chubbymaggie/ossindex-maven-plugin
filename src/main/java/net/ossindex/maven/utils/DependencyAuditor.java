@@ -34,6 +34,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.apache.maven.artifact.Artifact;
+import org.apache.maven.settings.Proxy;
 import org.apache.maven.shared.dependency.graph.DependencyNode;
 import org.apache.maven.shared.dependency.graph.traversal.CollectingDependencyNodeVisitor;
 import org.apache.maven.shared.dependency.graph.traversal.DependencyNodeVisitor;
@@ -54,13 +55,43 @@ import net.ossindex.common.PackageDescriptor;
 public class DependencyAuditor
 {
 	private Map<PackageDescriptor,PackageDescriptor> parents = new HashMap<PackageDescriptor,PackageDescriptor>();
-	private IPackageRequest request = OssIndexApi.createPackageRequest();
+	private IPackageRequest request;
 
 	/** Make a new dependency auditor
 	 */
 	public DependencyAuditor() {
+		request = OssIndexApi.createPackageRequest();
 	}
-	
+
+	/** Make a new dependency auditor with proxies
+	 */
+	public DependencyAuditor(List<Proxy> proxies) {
+		request = OssIndexApi.createPackageRequest();
+		for (Proxy proxy : proxies) {
+			String nonProxyHosts = proxy.getNonProxyHosts();
+			boolean ignore = false;
+			String protocol = proxy.getProtocol();
+			// We only support HTTPS
+			if (!"https".equals(protocol)) {
+				ignore = true;
+			}
+			// Were we told to ignore this proxy server?
+			if (nonProxyHosts != null) {
+				String[] tokens = nonProxyHosts.split("|");
+				for (String token : tokens) {
+					token = token.trim();
+					if ("ossindex.net".equalsIgnoreCase(token)) {
+						ignore = true;
+					}
+				}
+			}
+			// Should we use this proxy?
+			if (!ignore) {
+				request.addProxy(proxy.getProtocol(), proxy.getHost(), proxy.getPort(), proxy.getUsername(), proxy.getPassword());
+			}
+		}
+	}
+
 	/**
 	 * Add an artifact and its dependencies to the request
 	 * @param exclusionSet 
