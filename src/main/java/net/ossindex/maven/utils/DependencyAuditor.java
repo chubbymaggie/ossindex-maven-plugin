@@ -71,9 +71,14 @@ public class DependencyAuditor
 			String nonProxyHosts = proxy.getNonProxyHosts();
 			boolean ignore = false;
 			String protocol = proxy.getProtocol();
-			// We only support HTTPS
-			if (!"https".equals(protocol)) {
+			// We only support HTTP(S)
+			switch (protocol) {
+			case "http":
+			case "https":
+				break;
+			default:
 				ignore = true;
+				break;
 			}
 			// Were we told to ignore this proxy server?
 			if (nonProxyHosts != null) {
