@@ -1,7 +1,7 @@
 /**
  *	Copyright (c) 2015-2017 Vör Security Inc.
  *	All rights reserved.
- *	
+ *
  *	Redistribution and use in source and binary forms, with or without
  *	modification, are permitted provided that the following conditions are met:
  *	    * Redistributions of source code must retain the above copyright
@@ -12,7 +12,7 @@
  *	    * Neither the name of the <organization> nor the
  *	      names of its contributors may be used to endorse or promote products
  *	      derived from this software without specific prior written permission.
- *	
+ *
  *	THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
  *	ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -76,7 +76,7 @@ import net.ossindex.maven.utils.OssIndexResultsWrapper;
 
 /** Cross reference the project against information in OSS Index to identify
  * security and maintenance problems.
- * 
+ *
  * @author Ken Duck
  *
  */
@@ -92,7 +92,7 @@ public class OssIndexMojo extends AbstractMojo
 
 	/**
 	 * Comma separated list of artifacts to ignore errors for
-	 * 
+	 *
 	 * @parameter
 	 */
 	@Parameter(property = "audit.ignore", defaultValue = "")
@@ -101,7 +101,7 @@ public class OssIndexMojo extends AbstractMojo
 
 	/**
 	 * Should the plugin cause a build failure?
-	 * 
+	 *
 	 * @parameter
 	 */
 	@Parameter(property = "audit.failOnError", defaultValue = "true")
@@ -109,7 +109,7 @@ public class OssIndexMojo extends AbstractMojo
 
 	/**
 	 * Comma separated list of output file paths
-	 * 
+	 *
 	 * @parameter
 	 */
 	@Parameter(property = "audit.output", defaultValue = "")
@@ -118,17 +118,17 @@ public class OssIndexMojo extends AbstractMojo
 
 	@Parameter( defaultValue = "${session}", readonly = true, required = true )
 	private MavenSession session;
-	
+
 	/**
 	 * Information from the settings.xml file
 	 */
     @Parameter( defaultValue = "${settings}", readonly = true )
     private Settings settings;
-	
+
 	/**
 	 * Aggregate all of the results into a static list (so all module builds can access the same list).
 	 */
-	private static List<MavenPackageDescriptor> results = new LinkedList<MavenPackageDescriptor>(); 
+	private static List<MavenPackageDescriptor> results = new LinkedList<MavenPackageDescriptor>();
 
 	/**
 	 * The dependency tree builder to use.
@@ -161,7 +161,7 @@ public class OssIndexMojo extends AbstractMojo
 		moduleId.setGroupId(project.getGroupId());
 		moduleId.setArtifactId(project.getArtifactId());
 		moduleId.setVersion(project.getVersion());
-		
+
 		if(ignore != null)
 		{
 			ignore = ignore.trim();
@@ -203,7 +203,7 @@ public class OssIndexMojo extends AbstractMojo
 			// The computed dependency tree root node of the Maven project.
 			DependencyNode rootNode = dependencyGraphBuilder.buildDependencyGraph( buildingRequest, artifactFilter );
 			List<DependencyNode> depNodes = rootNode.getChildren();
-			
+
 			for (DependencyNode dep : depNodes) {
 				Artifact artifact = dep.getArtifact();
 				auditor.add(artifact.getGroupId(), artifact.getArtifactId(), artifact.getVersion(), dep);
@@ -224,7 +224,7 @@ public class OssIndexMojo extends AbstractMojo
 					failures += report(parentPkg, pkg);
 				}
 			}
-			
+
 			// Aggregate results for all modules
 			OssIndexMojo.results.addAll(results);
 
@@ -249,8 +249,9 @@ public class OssIndexMojo extends AbstractMojo
 
 			}
 		}
-		catch (IOException | DependencyGraphBuilderException e) {
-			e.printStackTrace();
+		catch (Throwable e) {
+			getLog().warn("Exception running OSS Index audit: " + e.getMessage());
+			getLog().debug(e);
 		}
 		finally
 		{
@@ -273,7 +274,7 @@ public class OssIndexMojo extends AbstractMojo
 				MavenIdWrapper module = pkg.getModule();
 				String pkgId = pkg.getMavenVersionId();
 				int total = pkg.getVulnerabilityTotal();
-				
+
 				if (!module.equals(lastModule)) {
 					out.println();
 					out.println("==============================================================");
@@ -367,10 +368,6 @@ public class OssIndexMojo extends AbstractMojo
 	}
 
 	/** Reports on all identified packages and known vulnerabilities.
-	 * 
-	 * @param adep List of package dependency information (with applicable audit information)
-	 * @return Number of applicable vulnerabilities (indicating failure)
-	 * @throws IOException On error
 	 */
 	private int report(MavenIdWrapper parentPkg, MavenPackageDescriptor pkg) throws IOException
 	{
