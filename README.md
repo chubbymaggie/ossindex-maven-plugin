@@ -1,6 +1,8 @@
 ossindex-maven-plugin
 =====================
 
+[![Maven Central](https://maven-badges.herokuapp.com/maven-central/net.ossindex/ossindex-maven-plugin/badge.svg)](https://maven-badges.herokuapp.com/maven-central/net.ossindex/ossindex-maven-plugin)
+
 Audits a [maven](https://maven.apache.org/) project using the [OSS Index REST API v2.0](https://ossindex.net) to identify known vulnerabilities in its dependencies.
 
 This is a rewrite from previous versions to use the much simplified v2.0 API.
