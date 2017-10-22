@@ -87,27 +87,30 @@ public class OssIndexMojo extends AbstractMojo {
     private MavenProject project;
     /**
      * Comma separated list of artifacts to ignore errors for
-     *
-     * @parameter
      */
     @Parameter(property = "audit.ignore", defaultValue = "")
     private String ignore;
-    private Set<String> ignoreSet = new HashSet<String>();
+    private Set<String> ignoreSet = new HashSet<>();
+
     /**
      * Should the plugin cause a build failure?
-     *
-     * @parameter
      */
     @Parameter(property = "audit.failOnError", defaultValue = "true")
     private String failOnError;
+
     /**
      * Comma separated list of output file paths
-     *
-     * @parameter
      */
     @Parameter(property = "audit.output", defaultValue = "")
     private String output;
-    private Set<File> outputFiles = new HashSet<File>();
+
+    /**
+     * Should the plugin cause a build failure?
+     */
+    @Parameter(property = "audit.quiet", defaultValue = "false")
+    private String quiet;
+
+    private Set<File> outputFiles = new HashSet<>();
     @Parameter(defaultValue = "${session}", readonly = true, required = true)
     private MavenSession session;
     /**
@@ -121,6 +124,26 @@ public class OssIndexMojo extends AbstractMojo {
     @Component(hint = "default")
     private DependencyGraphBuilder dependencyGraphBuilder;
 
+    /**
+     * Start time used for calculating elapsed time of plugin
+     */
+    private long start;
+
+    /**
+     * Count the total number of failures
+     */
+    private int failures;
+
+    /**
+     * Count the number of ignored vulnerabilities
+     */
+    private int ignored;
+
+    /**
+     * Count the number of analyzed dependencies
+     */
+    private int dependencies;
+
     // Your other mojo parameters and code here
     /*
 	 * (non-Javadoc)
@@ -128,6 +151,7 @@ public class OssIndexMojo extends AbstractMojo {
 	 */
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
+        start = System.currentTimeMillis();
         List<Proxy> proxies = new LinkedList<>();
         if (settings != null) {
             proxies = settings.getProxies();
@@ -188,13 +212,18 @@ public class OssIndexMojo extends AbstractMojo {
 
             // Analyze the results
             for (MavenPackageDescriptor pkg : results) {
+                dependencies++;
                 pkg.setModule(moduleId);
                 String idPkg = pkg.getMavenPackageId();
                 String idVer = pkg.getMavenVersionId();
                 if (!ignoreSet.contains(idPkg) && !ignoreSet.contains(idVer)) {
                     MavenIdWrapper parentPkg = pkg.getParent();
 
-                    failures += report(parentPkg, pkg);
+                    int pkgFailures = report(parentPkg, pkg);
+                    failures += pkgFailures;
+                    this.failures += pkgFailures;
+                } else {
+                    ignored++;
                 }
             }
 
@@ -214,12 +243,15 @@ public class OssIndexMojo extends AbstractMojo {
                 }
             }
 
+            System.err.println("ZOUNDS: " + quiet);
+            if ("true".equalsIgnoreCase(quiet)) {
+                logSummary();
+            }
+
             if (failures > 0) {
                 if ("true".equals(failOnError)) {
                     throw new MojoFailureException(failures + " known vulnerabilities affecting project dependencies");
                 }
-            } else {
-
             }
         } catch (Throwable e) {
             getLog().warn("Exception running OSS Index audit: " + e.getMessage());
@@ -227,6 +259,17 @@ public class OssIndexMojo extends AbstractMojo {
         } finally {
             auditor.close();
         }
+    }
+
+    private void logSummary() {
+        StringBuilder sb = new StringBuilder();
+        long end = System.currentTimeMillis();
+        long diff = end - start;
+        sb.append("Audited dependencies: ").append(dependencies);
+        sb.append(", Vulnerabilities: ").append(failures);
+        sb.append(", Ignored: ").append(ignored);
+        sb.append(", Time elapsed: ").append(diff).append(" ms");
+        getLog().info(sb.toString());
     }
 
     /**
@@ -365,10 +408,12 @@ public class OssIndexMojo extends AbstractMojo {
             getLog().error("");
             failures += matches;
         } else {
-            if (total > 0) {
-                getLog().info(pkgId + " - " + total + " known vulnerabilities, 0 affecting installed version");
-            } else {
-                getLog().info(pkgId + " - No known vulnerabilities");
+            if (!"true".equalsIgnoreCase(quiet)) {
+                if (total > 0) {
+                    getLog().info(pkgId + " - " + total + " known vulnerabilities, 0 affecting installed version");
+                } else {
+                    getLog().info(pkgId + " - No known vulnerabilities");
+                }
             }
         }
 

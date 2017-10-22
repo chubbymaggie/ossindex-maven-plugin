@@ -13,10 +13,7 @@ import org.apache.maven.plugin.testing.MojoRule;
 import org.apache.maven.plugin.testing.resources.TestResources;
 import org.apache.maven.project.MavenProject;
 import org.apache.maven.settings.Settings;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.Assert;
+import org.junit.*;
 
 
 public class OssIndexMojoTest {
@@ -72,6 +69,7 @@ public class OssIndexMojoTest {
 //    }
 
 
+    @Ignore
     @Test
     public void testInvalidProject() throws Exception {
 

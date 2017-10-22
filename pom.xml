@@ -130,6 +130,7 @@
             <version>1.2.12</version>
         </dependency>
 
+
         <dependency>
             <groupId>net.ossindex</groupId>
             <artifactId>ossindex-api</artifactId>
