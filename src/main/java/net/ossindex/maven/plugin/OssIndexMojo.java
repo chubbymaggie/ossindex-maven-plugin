@@ -52,6 +52,7 @@ import org.apache.maven.project.ProjectBuildingRequest;
 import org.apache.maven.settings.Proxy;
 import org.apache.maven.settings.Settings;
 import org.apache.maven.shared.dependency.graph.DependencyGraphBuilder;
+import org.apache.maven.shared.dependency.graph.DependencyGraphBuilderException;
 import org.apache.maven.shared.dependency.graph.DependencyNode;
 
 import javax.xml.bind.JAXBContext;
@@ -128,9 +129,12 @@ public class OssIndexMojo extends AbstractMojo {
 	 */
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
-        List<Proxy> proxies = settings.getProxies();
-        if (proxies != null && proxies.size() > 0) {
-            getLog().debug("Using proxy");
+        List<Proxy> proxies = new LinkedList<>();
+        if (settings != null) {
+            proxies = settings.getProxies();
+            if (proxies != null && proxies.size() > 0) {
+                getLog().debug("Using proxy");
+            }
         }
 
         MavenIdWrapper moduleId = new MavenIdWrapper();
@@ -218,7 +222,7 @@ public class OssIndexMojo extends AbstractMojo {
             } else {
 
             }
-        } catch (Throwable e) {
+        } catch (IOException | DependencyGraphBuilderException e) {
             getLog().warn("Exception running OSS Index audit: " + e.getMessage());
             getLog().debug(e);
         } finally {
