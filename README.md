@@ -26,6 +26,24 @@ A phase is required to ensure that all dependencies are correctly identified. Fo
 mvn <compile> net.ossindex:ossindex-maven-plugin:audit
 ```
 
+### Options
+```
+  -Daudit.ignore=<groupid>:<artifactid>:[version][,<groupid>:<artifactid>:[version]]*
+    Ignore vulnerabilities in the comma delimited list of packages (with optional versions)
+  
+  -Daudit.failOnError=true|false (default true)
+    Indicate whether the build should fail when vulnerabilities are found
+  
+  -Daudit.output=<file(s)>
+    Output a vulnerability report to the specified file(s)
+  
+  -Daudit.quiet
+    Only output warning and error messages (and a summary line)
+  
+  -Daudit.warnOnIgnore
+    Provide console warning log output for vulnerabilities that are ignored
+```
+
 ### Success output
 This will run the OSS Index Auditor against the applicable maven project. A successfull
 scan finding no errors will look something like this:
