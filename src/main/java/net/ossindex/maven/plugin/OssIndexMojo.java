@@ -132,6 +132,11 @@ public class OssIndexMojo extends AbstractMojo {
     /**
      * Count the total number of failures
      */
+    private int failedPackages;
+
+    /**
+     * Count the total number of failures
+     */
     private int failures;
 
     /**
@@ -188,8 +193,9 @@ public class OssIndexMojo extends AbstractMojo {
         DependencyAuditor auditor = new DependencyAuditor(proxies);
 
         try {
-            getLog().info("OSS Index dependency audit");
-
+            if (!"true".equalsIgnoreCase(quiet)) {
+                getLog().info("OSS Index dependency audit");
+            }
             int failures = 0;
 
             ArtifactFilter artifactFilter = null;
@@ -220,8 +226,11 @@ public class OssIndexMojo extends AbstractMojo {
                     MavenIdWrapper parentPkg = pkg.getParent();
 
                     int pkgFailures = report(parentPkg, pkg);
-                    failures += pkgFailures;
-                    this.failures += pkgFailures;
+                    if (pkgFailures > 0) {
+                        failedPackages++;
+                        failures += pkgFailures;
+                        this.failures += pkgFailures;
+                    }
                 } else {
                     ignored++;
                 }
@@ -242,22 +251,22 @@ public class OssIndexMojo extends AbstractMojo {
                     exportXml(file, OssIndexMojo.results);
                 }
             }
-
-            System.err.println("ZOUNDS: " + quiet);
-            if ("true".equalsIgnoreCase(quiet)) {
-                logSummary();
-            }
-
-            if (failures > 0) {
-                if ("true".equals(failOnError)) {
-                    throw new MojoFailureException(failures + " known vulnerabilities affecting project dependencies");
-                }
-            }
         } catch (Throwable e) {
             getLog().warn("Exception running OSS Index audit: " + e.getMessage());
+            e.printStackTrace();
             getLog().debug(e);
         } finally {
             auditor.close();
+        }
+
+        if ("true".equalsIgnoreCase(quiet)) {
+            logSummary();
+        }
+
+        if (failures > 0) {
+            if ("true".equals(failOnError)) {
+                throw new MojoFailureException(failures + " known vulnerabilities affecting project dependencies");
+            }
         }
     }
 
@@ -265,9 +274,10 @@ public class OssIndexMojo extends AbstractMojo {
         StringBuilder sb = new StringBuilder();
         long end = System.currentTimeMillis();
         long diff = end - start;
-        sb.append("Audited dependencies: ").append(dependencies);
-        sb.append(", Vulnerabilities: ").append(failures);
+        sb.append("Audited packages: ").append(dependencies);
         sb.append(", Ignored: ").append(ignored);
+        sb.append(", Vulnerable: ").append(failedPackages);
+        sb.append(" [").append(failures).append(" issues]");
         sb.append(", Time elapsed: ").append(diff).append(" ms");
         getLog().info(sb.toString());
     }
