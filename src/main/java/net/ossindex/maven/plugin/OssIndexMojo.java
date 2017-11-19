@@ -58,6 +58,7 @@ import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
 import javax.xml.bind.Marshaller;
 import java.io.*;
+import java.net.UnknownHostException;
 import java.util.*;
 
 /** Cross reference the project against information in OSS Index to identify
@@ -109,6 +110,12 @@ public class OssIndexMojo extends AbstractMojo {
      */
     @Parameter(property = "audit.quiet", defaultValue = "false")
     private String quiet;
+
+    /**
+     * Report ignored issues as warnings
+     */
+    @Parameter(property = "audit.warnOnIgnore", defaultValue = "false")
+    private String warnOnIgnore;
 
     private Set<File> outputFiles = new HashSet<>();
     @Parameter(defaultValue = "${session}", readonly = true, required = true)
@@ -233,6 +240,11 @@ public class OssIndexMojo extends AbstractMojo {
                     }
                 } else {
                     ignored++;
+
+                    if ("true".equalsIgnoreCase(warnOnIgnore)) {
+                        MavenIdWrapper parentPkg = pkg.getParent();
+                        report(parentPkg, pkg, false);
+                    }
                 }
             }
 
@@ -252,8 +264,7 @@ public class OssIndexMojo extends AbstractMojo {
                 }
             }
         } catch (Throwable e) {
-            getLog().warn("Exception running OSS Index audit: " + e.getMessage());
-            e.printStackTrace();
+            getLog().warn(e.getClass().getSimpleName() + " running OSS Index audit: " + e.getMessage());
             getLog().debug(e);
         } finally {
             auditor.close();
@@ -392,6 +403,10 @@ public class OssIndexMojo extends AbstractMojo {
     /** Reports on all identified packages and known vulnerabilities.
      */
     private int report(MavenIdWrapper parentPkg, MavenPackageDescriptor pkg) throws IOException {
+        return report(parentPkg, pkg, true);
+    }
+
+    private int report(MavenIdWrapper parentPkg, MavenPackageDescriptor pkg, boolean logToError) throws IOException {
         int failures = 0;
         String pkgId = pkg.getMavenVersionId();
         int total = pkg.getVulnerabilityTotal();
@@ -399,23 +414,50 @@ public class OssIndexMojo extends AbstractMojo {
         List<VulnerabilityDescriptor> vulnerabilities = pkg.getVulnerabilities();
         if (vulnerabilities != null && !vulnerabilities.isEmpty()) {
             int matches = pkg.getVulnerabilityMatches();
-            getLog().error("");
-            getLog().error("--------------------------------------------------------------");
-            getLog().error(pkgId + "  [VULNERABLE]");
+            if (logToError) {
+                getLog().error("");
+                getLog().error("--------------------------------------------------------------");
+                getLog().error(pkgId + "  [VULNERABLE]");
+            } else {
+                getLog().warn("");
+                getLog().warn("--------------------------------------------------------------");
+                getLog().warn(pkgId + "  [VULNERABLE]");
+            }
             if (parentPkg != null) {
                 String parentId = parentPkg.getMavenVersionId();
-                getLog().error("  required by " + parentId);
+                if (logToError) {
+                    getLog().error("  required by " + parentId);
+                } else {
+                    getLog().warn("  required by " + parentId);
+                }
             }
-            getLog().error(total + " known vulnerabilities, " + matches + " affecting installed version");
-            getLog().error("");
-            for (VulnerabilityDescriptor vulnerability : vulnerabilities) {
-                getLog().error(vulnerability.getTitle());
-                getLog().error(vulnerability.getUriString());
-                getLog().error(vulnerability.getDescription());
+            if (logToError) {
+                getLog().error(total + " known vulnerabilities, " + matches + " affecting installed version");
                 getLog().error("");
+            } else {
+                getLog().warn(total + " known vulnerabilities, " + matches + " affecting installed version");
+                getLog().warn("");
             }
-            getLog().error("--------------------------------------------------------------");
-            getLog().error("");
+            for (VulnerabilityDescriptor vulnerability : vulnerabilities) {
+                if (logToError) {
+                    getLog().error(vulnerability.getTitle());
+                    getLog().error(vulnerability.getUriString());
+                    getLog().error(vulnerability.getDescription());
+                    getLog().error("");
+                } else {
+                    getLog().warn(vulnerability.getTitle());
+                    getLog().warn(vulnerability.getUriString());
+                    getLog().warn(vulnerability.getDescription());
+                    getLog().warn("");
+                }
+            }
+            if (logToError) {
+                getLog().error("--------------------------------------------------------------");
+                getLog().error("");
+            } else {
+                getLog().warn("--------------------------------------------------------------");
+                getLog().warn("");
+            }
             failures += matches;
         } else {
             if (!"true".equalsIgnoreCase(quiet)) {
