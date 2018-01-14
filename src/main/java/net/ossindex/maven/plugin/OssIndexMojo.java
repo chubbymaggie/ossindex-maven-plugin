@@ -38,7 +38,10 @@ import org.apache.log4j.BasicConfigurator;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.apache.maven.artifact.Artifact;
+import org.apache.maven.artifact.resolver.filter.AndArtifactFilter;
 import org.apache.maven.artifact.resolver.filter.ArtifactFilter;
+import org.apache.maven.artifact.resolver.filter.OrArtifactFilter;
+import org.apache.maven.artifact.resolver.filter.ScopeArtifactFilter;
 import org.apache.maven.execution.MavenSession;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
@@ -110,6 +113,12 @@ public class OssIndexMojo extends AbstractMojo {
      */
     @Parameter(property = "audit.quiet", defaultValue = "false")
     private String quiet;
+
+    /**
+     * Should the plugin cause a build failure?
+     */
+    @Parameter(property = "audit.scope")
+    private String scope;
 
     /**
      * Report ignored issues as warnings
@@ -205,7 +214,23 @@ public class OssIndexMojo extends AbstractMojo {
             }
             int failures = 0;
 
+            // Build the ArtifactFilter to consider the scope passed in on as a system property
             ArtifactFilter artifactFilter = null;
+            if (scope != null) {
+                String[] tokens = scope.split(",");
+                switch (tokens.length) {
+                    case 1:
+                        artifactFilter = new ScopeArtifactFilter(scope.trim());
+                        break;
+                    default:
+                        artifactFilter = new OrArtifactFilter();
+                        for (String token: tokens) {
+                            token = token.trim();
+                            ((OrArtifactFilter)artifactFilter).add(new ScopeArtifactFilter(token));
+                        }
+                        break;
+                }
+            }
             ProjectBuildingRequest buildingRequest =
                     new DefaultProjectBuildingRequest(session.getProjectBuildingRequest());
 
