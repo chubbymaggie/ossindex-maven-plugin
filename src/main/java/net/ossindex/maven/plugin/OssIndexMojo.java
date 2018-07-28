@@ -38,13 +38,11 @@ import org.apache.log4j.BasicConfigurator;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.apache.maven.artifact.Artifact;
-import org.apache.maven.artifact.resolver.filter.AndArtifactFilter;
 import org.apache.maven.artifact.resolver.filter.ArtifactFilter;
 import org.apache.maven.artifact.resolver.filter.OrArtifactFilter;
 import org.apache.maven.artifact.resolver.filter.ScopeArtifactFilter;
 import org.apache.maven.execution.MavenSession;
 import org.apache.maven.plugin.AbstractMojo;
-import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugins.annotations.Component;
 import org.apache.maven.plugins.annotations.Mojo;
@@ -61,7 +59,6 @@ import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
 import javax.xml.bind.Marshaller;
 import java.io.*;
-import java.net.UnknownHostException;
 import java.util.*;
 
 /** Cross reference the project against information in OSS Index to identify
@@ -76,7 +73,7 @@ public class OssIndexMojo extends AbstractMojo {
     /**
      * Aggregate all of the results into a static list (so all module builds can access the same list).
      */
-    private static List<MavenPackageDescriptor> results = new LinkedList<MavenPackageDescriptor>();
+    private static List<MavenPackageDescriptor> results = new LinkedList<>();
 
     static {
         // Default log4j configuration. Hides configuration warnings.
@@ -95,6 +92,13 @@ public class OssIndexMojo extends AbstractMojo {
     @Parameter(property = "audit.ignore", defaultValue = "")
     private String ignore;
     private Set<String> ignoreSet = new HashSet<>();
+
+    /**
+     * Comma separated list of ignored vulnerability IDs.
+     */
+    @Parameter(property = "audit.ignoreIds", defaultValue = "")
+    private String ignoreIds;
+    private Set<Long> ignoreIdSet = new HashSet<>();
 
     /**
      * Should the plugin cause a build failure?
@@ -171,7 +175,7 @@ public class OssIndexMojo extends AbstractMojo {
 	 * @see org.apache.maven.plugin.Mojo#execute()
 	 */
     @Override
-    public void execute() throws MojoExecutionException, MojoFailureException {
+    public void execute() throws MojoFailureException {
         start = System.currentTimeMillis();
         List<Proxy> proxies = new LinkedList<>();
         if (settings != null) {
@@ -186,33 +190,22 @@ public class OssIndexMojo extends AbstractMojo {
         moduleId.setArtifactId(project.getArtifactId());
         moduleId.setVersion(project.getVersion());
 
-        if (ignore != null) {
-            ignore = ignore.trim();
-            if (!ignore.isEmpty()) {
-                String[] tokens = ignore.split(",");
-                for (String token : tokens) {
-                    ignoreSet.add(token.trim());
-                }
-            }
+        ignoreSet.addAll(parseList(ignore));
+
+        for (String token : parseList(ignoreIds)) {
+            ignoreIdSet.add(Long.valueOf(token));
         }
 
-        if (output != null) {
-            output = output.trim();
-            if (!output.isEmpty()) {
-                String[] tokens = output.split(",");
-                for (String token : tokens) {
-                    outputFiles.add(new File(token));
-                }
-            }
+        for (String token : parseList(output)) {
+            outputFiles.add(new File(token));
         }
 
         DependencyAuditor auditor = new DependencyAuditor(proxies);
 
         try {
-            if (!"true".equalsIgnoreCase(quiet)) {
+            if (!isTrue(quiet)) {
                 getLog().info("OSS Index dependency audit");
             }
-            int failures = 0;
 
             // Build the ArtifactFilter to consider the scope passed in on as a system property
             ArtifactFilter artifactFilter = null;
@@ -260,13 +253,12 @@ public class OssIndexMojo extends AbstractMojo {
                     int pkgFailures = report(parentPkg, pkg);
                     if (pkgFailures > 0) {
                         failedPackages++;
-                        failures += pkgFailures;
                         this.failures += pkgFailures;
                     }
                 } else {
                     ignored++;
 
-                    if ("true".equalsIgnoreCase(warnOnIgnore)) {
+                    if (isTrue(warnOnIgnore)) {
                         MavenIdWrapper parentPkg = pkg.getParent();
                         report(parentPkg, pkg, false);
                     }
@@ -295,15 +287,33 @@ public class OssIndexMojo extends AbstractMojo {
             auditor.close();
         }
 
-        if ("true".equalsIgnoreCase(quiet)) {
+        if (isTrue(quiet)) {
             logSummary();
         }
 
         if (failures > 0) {
-            if ("true".equals(failOnError)) {
+            if (isTrue(failOnError)) {
                 throw new MojoFailureException(failures + " known vulnerabilities affecting project dependencies");
             }
         }
+    }
+
+    private static List<String> parseList(String list) {
+        List<String> result = new ArrayList<>();
+        if (list != null) {
+            list = list.trim();
+            if (!list.isEmpty()) {
+                String[] tokens = list.split(",");
+                for (String token : tokens) {
+                    result.add(token.trim());
+                }
+            }
+        }
+        return result;
+    }
+
+    private boolean isTrue(String flag) {
+        return "true".equalsIgnoreCase(flag);
     }
 
     private void logSummary() {
@@ -324,10 +334,8 @@ public class OssIndexMojo extends AbstractMojo {
      * @param results Data to export
      */
     private void exportTxt(File file, Collection<MavenPackageDescriptor> results) {
-        PrintWriter out = null;
         MavenIdWrapper lastModule = null;
-        try {
-            out = new PrintWriter(new FileWriter(file));
+        try (PrintWriter out = new PrintWriter(new FileWriter(file))) {
             for (MavenPackageDescriptor pkg : results) {
                 MavenIdWrapper parentPkg = pkg.getParent();
                 MavenIdWrapper module = pkg.getModule();
@@ -372,10 +380,6 @@ public class OssIndexMojo extends AbstractMojo {
             }
         } catch (IOException e) {
             getLog().warn("Cannot export to " + file + ": " + e.getMessage());
-        } finally {
-            if (out != null) {
-                out.close();
-            }
         }
     }
 
@@ -432,60 +436,18 @@ public class OssIndexMojo extends AbstractMojo {
     }
 
     private int report(MavenIdWrapper parentPkg, MavenPackageDescriptor pkg, boolean logToError) throws IOException {
-        int failures = 0;
         String pkgId = pkg.getMavenVersionId();
         int total = pkg.getVulnerabilityTotal();
 
-        List<VulnerabilityDescriptor> vulnerabilities = pkg.getVulnerabilities();
+        List<VulnerabilityDescriptor> vulnerabilities = filterIgnoredVulnerabilities(pkg.getVulnerabilities(), pkg, pkg.getParent());
+
+        int failures = 0;
         if (vulnerabilities != null && !vulnerabilities.isEmpty()) {
-            int matches = pkg.getVulnerabilityMatches();
-            if (logToError) {
-                getLog().error("");
-                getLog().error("--------------------------------------------------------------");
-                getLog().error(pkgId + "  [VULNERABLE]");
-            } else {
-                getLog().warn("");
-                getLog().warn("--------------------------------------------------------------");
-                getLog().warn(pkgId + "  [VULNERABLE]");
-            }
-            if (parentPkg != null) {
-                String parentId = parentPkg.getMavenVersionId();
-                if (logToError) {
-                    getLog().error("  required by " + parentId);
-                } else {
-                    getLog().warn("  required by " + parentId);
-                }
-            }
-            if (logToError) {
-                getLog().error(total + " known vulnerabilities, " + matches + " affecting installed version");
-                getLog().error("");
-            } else {
-                getLog().warn(total + " known vulnerabilities, " + matches + " affecting installed version");
-                getLog().warn("");
-            }
-            for (VulnerabilityDescriptor vulnerability : vulnerabilities) {
-                if (logToError) {
-                    getLog().error(vulnerability.getTitle());
-                    getLog().error(vulnerability.getUriString());
-                    getLog().error(vulnerability.getDescription());
-                    getLog().error("");
-                } else {
-                    getLog().warn(vulnerability.getTitle());
-                    getLog().warn(vulnerability.getUriString());
-                    getLog().warn(vulnerability.getDescription());
-                    getLog().warn("");
-                }
-            }
-            if (logToError) {
-                getLog().error("--------------------------------------------------------------");
-                getLog().error("");
-            } else {
-                getLog().warn("--------------------------------------------------------------");
-                getLog().warn("");
-            }
+            int matches = vulnerabilities.size();
+            reportVulnerabilities(parentPkg, logToError, pkgId, vulnerabilities, total, matches);
             failures += matches;
         } else {
-            if (!"true".equalsIgnoreCase(quiet)) {
+            if (!isTrue(quiet)) {
                 if (total > 0) {
                     getLog().info(pkgId + " - " + total + " known vulnerabilities, 0 affecting installed version");
                 } else {
@@ -495,6 +457,63 @@ public class OssIndexMojo extends AbstractMojo {
         }
 
         return failures;
+    }
+
+    private void reportVulnerabilities(MavenIdWrapper parentPkg, boolean logToError, String pkgId, List<VulnerabilityDescriptor> vulnerabilities, int total, int matches) {
+        MismatchLogger logger = logToError ? new ErrorLogger() : new WarnLogger();
+        logger.log("");
+        logger.log("--------------------------------------------------------------");
+        logger.log(pkgId + "  [VULNERABLE]");
+        if (parentPkg != null) {
+            String parentId = parentPkg.getMavenVersionId();
+            logger.log("  required by " + parentId);
+        }
+        logger.log(total + " known vulnerabilities, " + matches + " affecting installed version");
+        logger.log("");
+
+        for (VulnerabilityDescriptor vulnerability : vulnerabilities) {
+            logger.log(vulnerability.getTitle());
+            logger.log(vulnerability.getUriString());
+            logger.log(vulnerability.getDescription());
+            logger.log("");
+        }
+        logger.log("--------------------------------------------------------------");
+        logger.log("");
+    }
+
+    private List<VulnerabilityDescriptor> filterIgnoredVulnerabilities(List<VulnerabilityDescriptor> vulnerabilities, MavenPackageDescriptor pkg, MavenIdWrapper parentPkg) {
+        if (ignoreIdSet.isEmpty() || vulnerabilities == null || vulnerabilities.isEmpty()) {
+            return vulnerabilities;
+        }
+        List<VulnerabilityDescriptor> result = new ArrayList<>();
+        for (VulnerabilityDescriptor desc : vulnerabilities) {
+            if (!ignoreIdSet.contains(desc.getId())) {
+                result.add(desc);
+            } else {
+                if (isTrue(warnOnIgnore)) {
+                    reportVulnerabilities(parentPkg, false, pkg.getMavenPackageId(), Collections.singletonList(desc), 1, 1);
+                }
+            }
+        }
+        return result;
+    }
+
+    private interface MismatchLogger {
+        void log(String message);
+    }
+
+    private class ErrorLogger implements MismatchLogger {
+        @Override
+        public void log(String message) {
+            getLog().error(message);
+        }
+    }
+
+    private class WarnLogger implements MismatchLogger {
+        @Override
+        public void log(String message) {
+            getLog().warn(message);
+        }
     }
 
 }
