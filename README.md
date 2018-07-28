@@ -21,3 +21,31 @@ the new OSS Index "3.0" API, which has many benefits:
 
 There are also [OSS Index rules](https://sonatype.github.io/ossindex-maven/enforcer-rules/)
 for [Maven Enforcer](https://maven.apache.org/enforcer/maven-enforcer-plugin/).
+
+Upgrade path
+------------
+
+To disable the deprecation warning in 2.4.0, use the audit.hideDeprecationWarning option
+
+```
+mvn install net.ossindex:ossindex-maven-plugin:audit -Daudit.hideDeprecationWarning=true
+```
+
+See https://sonatype.github.io/ossindex-maven/maven-plugin/ for configuration information
+for the ossindex-maven plugin. It can be configured directly within your POM file.
+
+To run via the command line (which was described in this README for for 2.x)
+you can do the following:
+
+```
+mvn org.sonatype.ossindex.maven:ossindex-maven-plugin:audit -f pom.xml
+```
+
+The various command line arguments which align with those of the deprecated version are:
+
+* Prevent build from failing on vulnerability found: `-Dossindex.fail=[true|false]`
+* Save results report: `-Dossindex.reportFile=file.[txt|json|xml]`
+* Ignore a package: `-DexcludeCoordinates=<groupId>:<artifactId>[:<type>[:<classifier>]]:<version>`
+* Ignore a vulnerability: `-Dossindex.excludeVulnerabilityIds=<vuln ID>`
+* Scan specified scope: `-Dossindex.scope=<scope>`
+

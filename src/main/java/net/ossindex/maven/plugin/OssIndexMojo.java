@@ -144,6 +144,9 @@ public class OssIndexMojo extends AbstractMojo {
     @Component(hint = "default")
     private DependencyGraphBuilder dependencyGraphBuilder;
 
+    @Parameter(property = "audit.hideDeprecationWarning", defaultValue = "false")
+    private String hideDeprecationWarning;
+
     /**
      * Start time used for calculating elapsed time of plugin
      */
@@ -198,6 +201,16 @@ public class OssIndexMojo extends AbstractMojo {
 
         for (String token : parseList(output)) {
             outputFiles.add(new File(token));
+        }
+
+        if (!isTrue(hideDeprecationWarning)) {
+            getLog().info("");
+            getLog().info("-----------------------------------------------------------------------------------------");
+            getLog().info("ossindex-maven-plugin DEPRECATED");
+            getLog().info("");
+            getLog().info("Information and upgrade path in README: https://github.com/OSSIndex/ossindex-maven-plugin");
+            getLog().info("-----------------------------------------------------------------------------------------");
+            getLog().info("");
         }
 
         DependencyAuditor auditor = new DependencyAuditor(proxies);
@@ -343,6 +356,13 @@ public class OssIndexMojo extends AbstractMojo {
                 int total = pkg.getVulnerabilityTotal();
 
                 if (!module.equals(lastModule)) {
+                    out.println("");
+                    out.println("-----------------------------------------------------------------------------------------");
+                    out.println("ossindex-maven-plugin DEPRECATED");
+                    out.println("");
+                    out.println("Information and upgrade path in README: https://github.com/OSSIndex/ossindex-maven-plugin");
+                    out.println("-----------------------------------------------------------------------------------------");
+                    out.println("");
                     out.println();
                     out.println("==============================================================");
                     out.println(module);

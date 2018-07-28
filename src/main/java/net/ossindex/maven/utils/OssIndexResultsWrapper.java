@@ -13,6 +13,8 @@ import java.util.Collection;
 @XmlRootElement(name = "OssIndex")
 public class OssIndexResultsWrapper {
 
+    private String deprecated = "ossindex-maven-plugin DEPRECATED: Information and upgrade path in README: https://github.com/OSSIndex/ossindex-maven-plugin";
+
     private Collection<MavenPackageDescriptor> packages;
 
     public OssIndexResultsWrapper() {
